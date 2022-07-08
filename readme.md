@@ -1,6 +1,6 @@
 ## physmem
 
-A command line utility to read/write physical memory on Windows via asmmap64 driver.
+A command line utility to read/write physical memory on Windows via **vulnerable** asmmap64 driver.
 
 Run with **administrative privileges**.
 
@@ -10,7 +10,9 @@ Thanks @**[Hyatice](https://github.com/Hyatice)** and @**[ciphray](https://githu
 
 ### ⚠ Warning ⚠
 
-Reading or writing some locations of physical memory can cause data corruption, crash, or any unexpected behaviors. Beware for endianness.
+- Reading or writing some locations of physical memory can cause data corruption, crash, or any unexpected behaviors.
+- If `asmmap64` driver is not removed from system, calling its ioctl may not require promoted privileges to read/write arbitrary memory location. Use with cautions!
+- Beware for endianness.
 
 
 
@@ -76,6 +78,12 @@ physmem.exe writeblk 0xfed159a0 8 00 82 FE 00 00 82 42 00
 ### Build
 
 Build with CMAKE on MinGW64.
+
+
+
+### Issues
+
+- `asmmap64` cannot remove from system for now until reboot
 
 
 

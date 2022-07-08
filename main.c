@@ -318,11 +318,6 @@ static int physmem_rw(void)
                 return 0;
 
         if (asmmap64_open()) {
-                if ((err = driver_path_get())) {
-                        pr_err("failed to get %ls\n", DRV_FILE);
-                        return err;
-                }
-
                 asmmap64_remove(1);
                 if ((err = asmmap64_install())) {
                         pr_err("failed to install asmmap64 driver\n");
@@ -411,6 +406,11 @@ int wmain(int wargc, wchar_t *wargv[])
 
         if ((err = parse_wargs(wargc, wargv)))
                 return err;
+
+        if ((err = driver_path_get())) {
+                pr_err("failed to get %ls\n", DRV_FILE);
+                return err;
+        }
 
         switch (cmd) {
         case CMD_READ:

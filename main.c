@@ -117,6 +117,8 @@ static int driver_path_get(void)
         memset(g_drv_path, 0x00, sizeof(g_drv_path));
         snwprintf(g_drv_path, ARRAY_SIZE(g_drv_path), L"%ls%ls%ls", drive_letter, dir_path, DRV_FILE);
 
+        pr_verbose("driver: %ls\n", g_drv_path);
+
         return 0;
 }
 
@@ -242,6 +244,11 @@ static int parse_wargs(int wargc, wchar_t *wargv[])
                 rw_sz = sz;
                 rw_addr = addr;
                 mmap_sz = sz;
+
+                if (g_logprint_level & LOG_LEVEL_VERBOSE) {
+                        pr_rawlvl(VERBOSE, "bytes to write:\n");
+                        hexdump(wr_bytes, rw_sz, 0);
+                }
         } else if (!wcsncmp(wargv[i], L"read", 4)) {
                 uint64_t a;
                 uint32_t w;
@@ -284,6 +291,8 @@ static int parse_wargs(int wargc, wchar_t *wargv[])
                 rw_sz = w / 8;
                 rw_addr = a;
                 rw_value = v;
+
+                pr_rawlvl(VERBOSE, "write value: 0x%016jx\n", rw_value);
         } else {
                 return -EINVAL;
         }
@@ -346,6 +355,10 @@ static int physmem_rw(void)
                 pr_err("failed to mmap phys addr 0x%016jx\n", rw_addr);
                 goto out;
         }
+
+        pr_rawlvl(VERBOSE, "read/write size: %u byte(s)\n", rw_sz);
+        pr_rawlvl(VERBOSE, "phys addr: 0x%016jx\n", rw_addr);
+        pr_rawlvl(VERBOSE, "virt addr: 0x%016jx\n", (intptr_t)virt_addr);
 
         switch (cmd) {
         case CMD_READBLK:

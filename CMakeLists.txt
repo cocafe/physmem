@@ -47,3 +47,4 @@ add_executable(physram
 
 target_link_libraries(physram ntdll)
 target_link_libraries(physram ntoskrnl)
+target_link_libraries(physram psapi)

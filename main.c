@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <winternl.h>
 #include <winerror.h>
+#include <psapi.h>
 
 #include "getopt.h"
 #include "logging.h"
@@ -101,12 +102,20 @@ static void hexdump(const void *data, size_t size, uint64_t prefix_addr) {
 
 static int driver_path_get(void)
 {
-        memset(g_drv_path, 0x00, sizeof(g_drv_path));
+        wchar_t image_path[MAX_PATH] = { };
+        wchar_t drive_letter[16] = { };
+        wchar_t dir_path[MAX_PATH] = { };
+        DWORD image_cnt = ARRAY_SIZE(image_path);
 
-        if (0 == GetFullPathName(DRV_FILE, sizeof(g_drv_path) / sizeof(wchar_t), g_drv_path, NULL)) {
-                pr_err("failed to get file: %ls\n", DRV_FILE);
+        if (0 == QueryFullProcessImageName(GetCurrentProcess(), 0, image_path, &image_cnt)) {
+                pr_err("QueryFullProcessImageName() failed, err = %ld\n", GetLastError());
                 return -EINVAL;
         }
+
+        _wsplitpath(image_path, drive_letter, dir_path, NULL, NULL);
+
+        memset(g_drv_path, 0x00, sizeof(g_drv_path));
+        snwprintf(g_drv_path, ARRAY_SIZE(g_drv_path), L"%ls%ls%ls", drive_letter, dir_path, DRV_FILE);
 
         return 0;
 }

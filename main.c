@@ -339,6 +339,8 @@ static int physmem_rw(void)
                 if (asmmap64_install()) {
                         asmmap64_remove(1);
 
+                        usleep(100 * 1000);
+
                         if ((err = asmmap64_install())) {
                                 pr_err("failed to install asmmap64 driver\n");
                                 return err;

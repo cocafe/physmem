@@ -336,14 +336,17 @@ static int physmem_rw(void)
                 return 0;
 
         if (asmmap64_open()) {
-                asmmap64_remove(1);
-                if ((err = asmmap64_install())) {
-                        pr_err("failed to install asmmap64 driver\n");
-                        return err;
+                if (asmmap64_install()) {
+                        asmmap64_remove(1);
+
+                        if ((err = asmmap64_install())) {
+                                pr_err("failed to install asmmap64 driver\n");
+                                return err;
+                        }
                 }
 
                 if ((err = asmmap64_open())) {
-                        pr_err("failed to open asmmap64 driver\n");
+                        pr_err("failed to open installed asmmap64 driver\n");
                         asmmap64_remove(1);
 
                         return err;

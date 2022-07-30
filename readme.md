@@ -83,7 +83,9 @@ Build with CMAKE on MinGW64.
 
 ### Issues
 
-- `asmmap64` cannot remove from system for now until reboot
+- `asmmap64` cannot remove from system via `driver remove` for now until reboot
+  - for security, use command "[ntdrvldr](https://github.com/iceboy233/ntdrvldr) **-u -n asmmap64 1**" to stop and remove driver from runtime **instantly**
+
 
 
 

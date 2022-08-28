@@ -75,7 +75,7 @@ static int driver_start(SC_HANDLE scmgr, LPCTSTR id)
                 DWORD _err = GetLastError();
 
                 if (_err != ERROR_SERVICE_ALREADY_RUNNING) {
-                        pr_err("StartService() failed, err = %ld\n", GetLastError());
+                        // pr_err("StartService() failed, err = %ld\n", GetLastError());
                         err = -EFAULT;
                 }
         }

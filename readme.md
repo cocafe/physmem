@@ -86,7 +86,9 @@ Build with CMAKE on MinGW64.
 - `asmmap64` cannot remove from system via `driver remove` for now until reboot
   - for security, use command "[ntdrvldr](https://github.com/iceboy233/ntdrvldr) **-u -n asmmap64 1**" to stop and remove driver from runtime **instantly**
 
+- `asmmap64` is blocked on `Windows 11 22h2` and later, set `VulnerableDriverBlocklistEnable` = 0 in `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\CI\Config`.
 
+  
 
 
 ### License

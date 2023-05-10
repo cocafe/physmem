@@ -319,6 +319,13 @@ static int physmem_rw(void)
         HANDLE map_hdl;
         uint8_t *virt_addr;
 
+        if (!is_inpoutx64_driver_open()) {
+                pr_err("Failed to open Inpoutx64 driver\n");
+                inpoutx64_deinit();
+
+                return -EIO;
+        }
+
         if (rw_sz == 0)
                 return 0;
 
@@ -420,12 +427,6 @@ int wmain(int wargc, wchar_t *wargv[])
                 return err;
 
         inpoutx64_init();
-        if (!is_inpoutx64_driver_open()) {
-                pr_err("Failed to open Inpoutx64 driver\n");
-                inpoutx64_deinit();
-
-                return -EIO;
-        }
 
         switch (cmd) {
         case CMD_READ:

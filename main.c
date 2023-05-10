@@ -11,11 +11,11 @@
 
 #include "getopt.h"
 #include "logging.h"
-#include "driver.h"
-#include "asmmap64.h"
 
-#define DRV_SVC_NAME    L"asmmap64"
-#define DRV_FILE        L"asmmap64.sys"
+#include "libinpoutx64/inpoutx64.h"
+
+#define DRV_FILE        L"inpoutx64.sys"
+#define NTDRVLDR_EXE    L"ntdrvldr.exe"
 
 enum {
         CMD_READ = 0,
@@ -27,7 +27,8 @@ enum {
         NUM_OPT_CMDS,
 };
 
-static wchar_t g_drv_path[MAX_PATH];
+static wchar_t driver_path[MAX_PATH];
+static wchar_t ntdrvldr_path[MAX_PATH];
 
 static uint32_t mmap_sz = 8;
 static uint32_t rw_sz = 0;
@@ -37,9 +38,6 @@ static uint8_t *wr_bytes;
 static int no_readback = 0;
 
 static int hexdump_print = 0;
-
-static int drv_unload = 0;
-static int drv_force_remove = 0;
 
 static int cmd = -1;
 
@@ -62,10 +60,19 @@ static char *help_text =
 "       -v              verbose print\n"
 "       -s              no readback after writing\n"
 "       -m <bytes>      mmap size, default: 8\n"
-"       -x              always remove asmmap64 driver on exit\n"
-"       -f              force remove driver for command \"driver remove\"\n"
 "       -C              hexdump style print\n"
+"Driver:\n"
+"       Install Manually:"
+"               ntdrvldr.exe -n inpoutx64 ABSOLUTE_PATH_TO\\inpoutx64.sys\n"
+"\n"
+"       Uninstall Manually:"
+"               ntdrvldr.exe -u -n inpoutx64 ABSOLUTE_PATH_TO\\inpoutx64.sys\n"
 ;
+
+PBYTE _stdcall (*_MapPhysToLin)(PBYTE pbPhysAddr, DWORD dwPhysSize, HANDLE *pPhysicalMemoryHandle);
+BOOL _stdcall (*_UnmapPhysicalMemory)(HANDLE PhysicalMemoryHandle, PBYTE pbLinAddr);
+BOOL _stdcall (*_GetPhysLong)(PBYTE pbPhysAddr, PDWORD pdwPhysVal);
+BOOL _stdcall (*_SetPhysLong)(PBYTE pbPhysAddr, DWORD dwPhysVal);
 
 static void hexdump(const void *data, size_t size, uint64_t prefix_addr) {
         char ascii[17];
@@ -100,7 +107,7 @@ static void hexdump(const void *data, size_t size, uint64_t prefix_addr) {
         }
 }
 
-static int driver_path_get(void)
+static int path_fix(wchar_t *abs_path, size_t cnt, wchar_t *filename)
 {
         wchar_t image_path[MAX_PATH] = { };
         wchar_t drive_letter[16] = { };
@@ -114,10 +121,8 @@ static int driver_path_get(void)
 
         _wsplitpath(image_path, drive_letter, dir_path, NULL, NULL);
 
-        memset(g_drv_path, 0x00, sizeof(g_drv_path));
-        snwprintf(g_drv_path, ARRAY_SIZE(g_drv_path), L"%ls%ls%ls", drive_letter, dir_path, DRV_FILE);
-
-        pr_verbose("driver: %ls\n", g_drv_path);
+        memset(abs_path, 0x00, sizeof(wchar_t) * cnt);
+        snwprintf(abs_path, cnt, L"%ls%ls%ls", drive_letter, dir_path, filename);
 
         return 0;
 }
@@ -131,7 +136,7 @@ static int parse_wargs(int wargc, wchar_t *wargv[])
 {
         int c;
 
-        while ((c = getopt_w(wargc, wargv, L"hm:xvsfC")) != -1) {
+        while ((c = getopt_w(wargc, wargv, L"hm:vsC")) != -1) {
                 switch (c) {
                 case 'h':
                         help();
@@ -146,20 +151,12 @@ static int parse_wargs(int wargc, wchar_t *wargv[])
 
                         break;
 
-                case 'x':
-                        drv_unload = 1;
-                        break;
-
                 case 'v':
                         g_logprint_level |= LOG_LEVEL_VERBOSE;
                         break;
 
                 case 's':
                         no_readback = 1;
-                        break;
-
-                case 'f':
-                        drv_force_remove = 1;
                         break;
 
                 case 'C':
@@ -308,16 +305,6 @@ invalid_args:
                 return -EINVAL;
 }
 
-static int asmmap64_install(void)
-{
-        return driver_manage(DRV_SVC_NAME, g_drv_path, 1, 0);
-}
-
-static int asmmap64_remove(int force)
-{
-        return driver_manage(DRV_SVC_NAME, g_drv_path, 0, force);
-}
-
 static void addr_printf(uint64_t addr, size_t sz, uint64_t val)
 {
         char _fmt[64] = { };
@@ -329,36 +316,16 @@ static void addr_printf(uint64_t addr, size_t sz, uint64_t val)
 
 static int physmem_rw(void)
 {
+        HANDLE map_hdl;
         uint8_t *virt_addr;
-        int err;
 
         if (rw_sz == 0)
                 return 0;
 
-        if (asmmap64_open()) {
-                if (asmmap64_install()) {
-                        asmmap64_remove(1);
-
-                        usleep(100 * 1000);
-
-                        if ((err = asmmap64_install())) {
-                                pr_err("failed to install asmmap64 driver\n");
-                                return err;
-                        }
-                }
-
-                if ((err = asmmap64_open())) {
-                        pr_err("failed to open installed asmmap64 driver\n");
-                        asmmap64_remove(1);
-
-                        return err;
-                }
-        }
-
-        virt_addr = asmmap64_mmap(rw_addr, mmap_sz);
+        virt_addr = MapPhysToLin((PBYTE)rw_addr, mmap_sz, &map_hdl);
         if (virt_addr == NULL) {
                 pr_err("failed to mmap phys addr 0x%016jx\n", rw_addr);
-                goto out;
+                return -EIO;
         }
 
         pr_rawlvl(VERBOSE, "read/write size: %u byte(s)\n", rw_sz);
@@ -411,11 +378,29 @@ static int physmem_rw(void)
                 break;
         }
 
-out:
-        asmmap64_close();
+        UnmapPhysicalMemory(map_hdl, virt_addr);
 
-        if (drv_unload)
-                asmmap64_remove(0);
+        return 0;
+}
+
+int driver_manage(int uninstall)
+{
+        STARTUPINFO startupinfo = { 0 };
+        PROCESS_INFORMATION procinfo = { 0 };
+        wchar_t real_cmd[PATH_MAX * 2] = { 0 };
+
+        path_fix(driver_path, ARRAY_SIZE(driver_path), DRV_FILE);
+        path_fix(ntdrvldr_path, ARRAY_SIZE(ntdrvldr_path), NTDRVLDR_EXE);
+
+        snwprintf(real_cmd, ARRAY_SIZE(real_cmd), L"\"%ls\" %ls -n inpoutx64 \"%ls\"",
+                  ntdrvldr_path, uninstall ? L"-u" : L" ", driver_path);
+
+        pr_info("%ls\n", real_cmd);
+
+        if (FALSE == CreateProcess(ntdrvldr_path, real_cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &startupinfo, &procinfo)) {
+                pr_err("failed to execute external program, err = 0x%08lx\n", GetLastError());
+                return -EFAULT;
+        }
 
         return 0;
 }
@@ -434,9 +419,12 @@ int wmain(int wargc, wchar_t *wargv[])
         if ((err = parse_wargs(wargc, wargv)))
                 return err;
 
-        if ((err = driver_path_get())) {
-                pr_err("failed to get %ls\n", DRV_FILE);
-                return err;
+        inpoutx64_init();
+        if (!is_inpoutx64_driver_open()) {
+                pr_err("Failed to open Inpoutx64 driver\n");
+                inpoutx64_deinit();
+
+                return -EIO;
         }
 
         switch (cmd) {
@@ -448,16 +436,18 @@ int wmain(int wargc, wchar_t *wargv[])
                 break;
 
         case CMD_DRV_INSTALL:
-                err = asmmap64_install();
+                err = driver_manage(0);
                 break;
 
         case CMD_DRV_REMOVE:
-                err = asmmap64_remove(drv_force_remove);
+                err = driver_manage(1);
                 break;
 
         default:
                 return -EINVAL;
         }
+
+        inpoutx64_deinit();
 
         return err;
 }

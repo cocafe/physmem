@@ -32,12 +32,10 @@ elseif(${CMAKE_BUILD_TYPE} STREQUAL "Release")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 ")
 endif()
 
+add_subdirectory(libinpoutx64)
+
 add_executable(physram
                main.c
-               asmmap64.c
-               asmmap64.h
-               driver.c
-               driver.h
                logging.c
                logging.h
                getopt.c
@@ -48,3 +46,4 @@ add_executable(physram
 target_link_libraries(physram ntdll)
 target_link_libraries(physram ntoskrnl)
 target_link_libraries(physram psapi)
+target_link_libraries(physram inpoutx64)
